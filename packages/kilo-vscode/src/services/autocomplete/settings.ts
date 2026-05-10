@@ -1,11 +1,8 @@
 import * as vscode from "vscode"
-
-const keys = new Set(["enableAutoTrigger", "enableSmartInlineTaskKeybinding", "enableChatAutocomplete"])
+import { AUTOCOMPLETE_MODELS, getAutocompleteModel } from "../../shared/autocomplete-models"
 
 type Message = {
   type: string
-  key?: unknown
-  value?: unknown
 }
 
 type Post = (msg: unknown) => void
@@ -13,13 +10,6 @@ type Post = (msg: unknown) => void
 export async function routeAutocompleteMessage(message: Message, post: Post): Promise<boolean> {
   if (message.type === "requestAutocompleteSettings") {
     post(buildAutocompleteSettingsMessage())
-    return true
-  }
-
-  if (message.type === "updateAutocompleteSetting") {
-    if (await update(message.key, message.value)) {
-      post(buildAutocompleteSettingsMessage())
-    }
     return true
   }
 
@@ -34,6 +24,7 @@ export function buildAutocompleteSettingsMessage() {
       enableAutoTrigger: config.get<boolean>("enableAutoTrigger", true),
       enableSmartInlineTaskKeybinding: config.get<boolean>("enableSmartInlineTaskKeybinding", false),
       enableChatAutocomplete: config.get<boolean>("enableChatAutocomplete", false),
+      model: getAutocompleteModel(config.get<string>("model") ?? "").id,
     },
   }
 }
@@ -47,13 +38,15 @@ export function watchAutocompleteConfig(post: Post): vscode.Disposable {
   })
 }
 
-async function update(key: unknown, value: unknown) {
-  if (typeof key !== "string") return false
-  if (!keys.has(key)) return false
+export function validAutocompleteSetting(key: string, value: unknown) {
+  if (key === "model") {
+    if (typeof value !== "string") return false
+    return AUTOCOMPLETE_MODELS.some((m) => m.id === value)
+  }
 
-  await vscode.workspace
-    .getConfiguration("kilo-code.new.autocomplete")
-    .update(key, value, vscode.ConfigurationTarget.Global)
+  if (key === "enableAutoTrigger") return typeof value === "boolean"
+  if (key === "enableSmartInlineTaskKeybinding") return typeof value === "boolean"
+  if (key === "enableChatAutocomplete") return typeof value === "boolean"
 
-  return true
+  return false
 }
